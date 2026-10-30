@@ -1,0 +1,26 @@
+Third-party software notices
+
+ReadNovelFull Library bundles the following third-party software. These links identify the upstream license terms and notices for the bundled versions. Consult the current upstream text before redistributing modified builds.
+
+Qt for Python / PySide6 6.8.3 and Qt 6.8.3, including Qt WebEngine
+The Qt libraries are distributed under the licensing options described by The Qt Company. The applicable terms depend on the components and the way the application is distributed. Read the Qt open-source obligations and component license information:
+https://www.qt.io/licensing/open-source-lgpl-obligations
+https://doc.qt.io/qt-6/licenses-used-in-qt.html
+https://doc.qt.io/qtforpython-6/licenses.html
+
+Requests 2.32.3
+Apache License 2.0. The license text is available at:
+https://www.apache.org/licenses/LICENSE-2.0
+
+Beautiful Soup 4.12.3
+MIT License. The project and license text are available at:
+https://www.crummy.com/software/BeautifulSoup/bs4/doc/#license
+
+Python 3.12
+Python Software Foundation License. License information is available at:
+https://docs.python.org/3/license.html
+
+PyInstaller 6.11.1 is used only during the build. Its license and exception are described at:
+https://pyinstaller.org/en/v6.11.1/license.html
+
+This notice is informational and does not replace or modify any upstream license. If you publish the source project on GitHub, choose and add a license for your own code only if you have the right to license it.

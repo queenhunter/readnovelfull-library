@@ -1,0 +1,63 @@
+name: Build Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+
+      - name: Build portable Windows app
+        run: python -m PyInstaller --noconfirm --clean ReadNovelFull.spec
+
+      - name: Stage and zip release
+        shell: pwsh
+        run: |
+          $stage = "release/ReadNovelFull-Windows-x64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item -Path "dist/ReadNovelFull/*" -Destination $stage -Recurse -Force
+          Copy-Item "README_RELEASE.txt" "$stage/README.txt" -Force
+          Copy-Item "THIRD_PARTY_NOTICES.txt" "$stage/THIRD_PARTY_NOTICES.txt" -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath "release/ReadNovelFull-Windows-x64.zip" -Force
+
+      - name: Confirm packaged executable exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "release/ReadNovelFull-Windows-x64/ReadNovelFull.exe")) {
+            throw "The packaged executable is missing from the release folder."
+          }
+
+      - name: Save ZIP as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReadNovelFull-Windows-x64
+          path: release/ReadNovelFull-Windows-x64.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release/ReadNovelFull-Windows-x64.zip

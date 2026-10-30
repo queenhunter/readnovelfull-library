@@ -1,0 +1,18 @@
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+.venv-build/
+venv/
+.env
+
+# PyInstaller build products and generated releases
+build/
+dist/
+release/
+*.spec.bak
+
+# Downloader output (novel text, chapter HTML, EPUBs, covers)
+readnovelfull/
+
+# Local archive and downloaded content; review before committing any ZIPs
+Read Novel Full.zip
