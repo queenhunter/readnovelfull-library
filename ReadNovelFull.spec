@@ -4,7 +4,7 @@ a = Analysis(
     ["ReadNovelFull_GUI.py"],
     pathex=[],
     binaries=[],
-    datas=[("Read_Novel_Full_V2_8.py", ".")],
+    datas=[("Read_Novel_Full_V2_8.py", "."), ("Novel Hall V1.0.py", ".")],
     hiddenimports=[
         # The downloader is imported dynamically from a bundled source file.
         "requests",

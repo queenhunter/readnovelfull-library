@@ -223,24 +223,32 @@ def get_chapter_links(chapter_list_url):
     return links
 
 # ====== STEP 2: Download chapters ======
-def download_chapters(links):
+def download_chapters(links, progress_callback=None):
+    """Download chapter pages, optionally reporting (current, total, event)."""
     print("⬇️ Downloading chapters...")
-    for i, url in enumerate(links):
-        filename = os.path.join(HTML_DIR, f"raw_{i+1:04d}.html")
-        if os.path.exists(filename):
-            continue
+    total = len(links)
+    for i, url in enumerate(links, start=1):
+        filename = os.path.join(HTML_DIR, f"raw_{i:04d}.html")
+        if progress_callback:
+            progress_callback(i, total, "starting")
+        r = None
         try:
-            r = requests.get(url, headers=HEADERS, timeout=10)
-            print(f"   Chapter {i+1} status: {r.status_code}")
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(r.text)
-            print(f"✅ Saved: raw_{i+1:04d}.html")
-            time.sleep(2)
+            if not os.path.exists(filename):
+                r = requests.get(url, headers=HEADERS, timeout=10)
+                print(f"   Chapter {i} status: {r.status_code}")
+                with open(filename, "w", encoding="utf-8") as f:
+                    f.write(r.text)
+                print(f"✅ Saved: raw_{i:04d}.html")
+                time.sleep(2)
         except Exception as e:
             print(f"❌ Failed to download {url}: {e}")
-            if 'r' in locals():
-                with open(os.path.join(FAILED_DIR, f"failed_{i+1:04d}.html"), "w", encoding="utf-8") as f:
-                    f.write(r.text)
+            response = locals().get("r")
+            if response is not None:
+                with open(os.path.join(FAILED_DIR, f"failed_{i:04d}.html"), "w", encoding="utf-8") as f:
+                    f.write(response.text)
+        finally:
+            if progress_callback:
+                progress_callback(i, total, "finished")
 
 # ====== STEP 3: Rename from latest to earliest ======
 def rename_html_files():
