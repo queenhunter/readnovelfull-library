@@ -9,6 +9,17 @@ if errorlevel 1 (
   exit /b 1
 )
 
+set "ISCC="
+where ISCC.exe >nul 2>nul
+if not errorlevel 1 set "ISCC=ISCC.exe"
+if not defined ISCC if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if not defined ISCC if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+if not defined ISCC (
+  echo Inno Setup 6 was not found. Install it from https://jrsoftware.org/isinfo.php and retry.
+  pause
+  exit /b 1
+)
+
 if not exist .venv-build\Scripts\python.exe py -3.12 -m venv .venv-build
 if errorlevel 1 goto :failed
 
@@ -20,21 +31,15 @@ if errorlevel 1 goto :failed
 if errorlevel 1 goto :failed
 
 if exist release rmdir /s /q release
-set "STAGE=release\ReadNovelFull-Windows-x64"
-mkdir "%STAGE%"
+mkdir release
 if errorlevel 1 goto :failed
-xcopy /e /i /y "dist\ReadNovelFull\*" "%STAGE%\"
-if errorlevel 1 goto :failed
-copy /y README_RELEASE.txt "%STAGE%\README.txt" >nul
-if errorlevel 1 goto :failed
-copy /y THIRD_PARTY_NOTICES.txt "%STAGE%\THIRD_PARTY_NOTICES.txt" >nul
-if errorlevel 1 goto :failed
-powershell -NoProfile -Command "Compress-Archive -Path '%STAGE%\*' -DestinationPath 'release\ReadNovelFull-Windows-x64.zip' -Force"
+set "APP_VERSION=1.0.0"
+"%ISCC%" installer.iss
 if errorlevel 1 goto :failed
 
 echo.
-echo Release package created: release\ReadNovelFull-Windows-x64.zip
-echo You can run ReadNovelFull.exe from the extracted folder.
+echo Installer created: release\ReadNovelFull-Setup-Windows-x64.exe
+echo Upload this installer as the GitHub Release asset.
 pause
 exit /b 0
 

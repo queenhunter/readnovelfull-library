@@ -6,8 +6,8 @@ if exist "%~dp0ReadNovelFull.exe" (
   start "" "%~dp0ReadNovelFull.exe"
   exit /b 0
 )
-if exist "%~dp0release\ReadNovelFull-Windows-x64\ReadNovelFull.exe" (
-  start "" "%~dp0release\ReadNovelFull-Windows-x64\ReadNovelFull.exe"
+if exist "%~dp0dist\ReadNovelFull\ReadNovelFull.exe" (
+  start "" "%~dp0dist\ReadNovelFull\ReadNovelFull.exe"
   exit /b 0
 )
 

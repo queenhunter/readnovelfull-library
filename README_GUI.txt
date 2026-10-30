@@ -1,8 +1,8 @@
 ReadNovelFull Library — desktop browser and downloader
 
-For the packaged Windows app, open the GitHub Release ZIP, extract the entire folder, and run ReadNovelFull.exe. It includes Python packages and the Qt browser runtime; it does not install dependencies when launched. See README_RELEASE.txt for release setup and publishing instructions.
+For the packaged Windows app, download and run ReadNovelFull-Setup-Windows-x64.exe from GitHub Releases. It installs the app and its Qt browser runtime and does not install dependencies at launch. See README_RELEASE.txt for release setup and publishing instructions.
 
-For source development, install Python 3.12 and the Python Launcher, then run build_windows.bat to create a Windows release ZIP. To run directly from source, install the packages in requirements-build.txt and launch ReadNovelFull_GUI.py with Python.
+For source development, install Python 3.12, the Python Launcher, and Inno Setup 6, then run build_windows.bat to create the Windows installer. To run directly from source, install the packages in requirements-build.txt and launch ReadNovelFull_GUI.py with Python.
 
 Browse to a novel's main page on readnovelfull.com, choose a chapter limit or leave it at All, then click Download this novel. Progress appears in the panel at the bottom.
 

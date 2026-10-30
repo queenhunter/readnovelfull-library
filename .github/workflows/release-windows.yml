@@ -1,16 +1,22 @@
-name: Build Windows release
+name: Build Windows installer
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      app_version:
+        description: Version number for the installer (for example 1.0.0)
+        required: true
+        default: 1.0.0
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  windows-package:
+  windows-installer:
     runs-on: windows-latest
     steps:
       - name: Check out source
@@ -23,36 +29,39 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-build.txt
 
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
 
-      - name: Build portable Windows app
+      - name: Build portable app folder
         run: python -m PyInstaller --noconfirm --clean ReadNovelFull.spec
 
-      - name: Stage and zip release
+      - name: Build Windows installer
         shell: pwsh
         run: |
-          $stage = "release/ReadNovelFull-Windows-x64"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item -Path "dist/ReadNovelFull/*" -Destination $stage -Recurse -Force
-          Copy-Item "README_RELEASE.txt" "$stage/README.txt" -Force
-          Copy-Item "THIRD_PARTY_NOTICES.txt" "$stage/THIRD_PARTY_NOTICES.txt" -Force
-          Compress-Archive -Path "$stage/*" -DestinationPath "release/ReadNovelFull-Windows-x64.zip" -Force
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler was not found." }
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" -replace '^v', '' } else { "${{ inputs.app_version }}" }
+          & $iscc "/DAPP_VERSION=$version" installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
 
-      - name: Confirm packaged executable exists
+      - name: Confirm installer exists
         shell: pwsh
         run: |
-          if (-not (Test-Path "release/ReadNovelFull-Windows-x64/ReadNovelFull.exe")) {
-            throw "The packaged executable is missing from the release folder."
+          if (-not (Test-Path "release/ReadNovelFull-Setup-Windows-x64.exe")) {
+            throw "The Windows installer was not created."
           }
 
-      - name: Save ZIP as a workflow artifact
+      - name: Save installer as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ReadNovelFull-Windows-x64
-          path: release/ReadNovelFull-Windows-x64.zip
+          name: ReadNovelFull-Setup-Windows-x64
+          path: release/ReadNovelFull-Setup-Windows-x64.exe
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -60,4 +69,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: release/ReadNovelFull-Windows-x64.zip
+          files: release/ReadNovelFull-Setup-Windows-x64.exe
