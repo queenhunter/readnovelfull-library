@@ -526,6 +526,29 @@ class DownloadWorker(QObject):
             self.finished.emit(result_path)
 
 
+class UpdateCheckWorker(QObject):
+    result = Signal(str, str)
+
+    @Slot()
+    def run(self):
+        request = urllib.request.Request(
+            GITHUB_LATEST_RELEASE_API,
+            headers={"User-Agent": "ReadNovelFull-Library", "Accept": "application/vnd.github+json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                release = json.loads(response.read().decode("utf-8"))
+            tag = str(release.get("tag_name", "")).strip()
+            release_url = str(release.get("html_url", "")).strip()
+            if tag and release_url and version_tuple(tag) > version_tuple(APP_VERSION):
+                self.result.emit(tag, release_url)
+            else:
+                self.result.emit("", "")
+        except Exception:
+            # Update checks are optional; network or API failures must not stop app startup.
+            self.result.emit("", "")
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -533,6 +556,8 @@ class MainWindow(QMainWindow):
         self.resize(1360, 880)
         self._download_thread = None
         self._worker = None
+        self._update_thread = None
+        self._update_worker = None
         self.settings = load_settings()
         self._build_ui()
         QApplication.styleHints().colorSchemeChanged.connect(self._apply_style)
@@ -675,6 +700,38 @@ class MainWindow(QMainWindow):
         self.setStatusBar(status)
         status.showMessage("Ready")
         self._apply_style()
+
+    def _check_for_updates_async(self):
+        if self._update_thread is not None:
+            return
+        self._update_thread = QThread(self)
+        self._update_worker = UpdateCheckWorker()
+        self._update_worker.moveToThread(self._update_thread)
+        self._update_thread.started.connect(self._update_worker.run)
+        self._update_worker.result.connect(self._update_check_finished)
+        self._update_worker.result.connect(self._update_thread.quit)
+        self._update_thread.finished.connect(self._update_worker.deleteLater)
+        self._update_thread.finished.connect(self._update_thread_finished)
+        self._update_thread.start()
+
+    @Slot(str, str)
+    def _update_check_finished(self, version, release_url):
+        if not version or not release_url:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Update available",
+            f"ReadNovelFull Library {version} is available. Your current version is {APP_VERSION}.\\n\\nOpen the GitHub release page?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            webbrowser.open(release_url)
+
+    @Slot()
+    def _update_thread_finished(self):
+        self._update_thread = None
+        self._update_worker = None
 
     @staticmethod
     def _button(text, object_name, tooltip=None):
