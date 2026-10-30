@@ -29,6 +29,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="ReadNovelFull",
+    icon="ReadNovelFull_Icon.ico",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

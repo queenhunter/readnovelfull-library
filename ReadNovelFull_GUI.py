@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
     QPushButton, QSpinBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget,
 )
-from PySide6.QtWebEngineCore import QWebEnginePage
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 if getattr(sys, "frozen", False):
@@ -254,14 +254,70 @@ def make_pdf_from_chapters(novel_title, chapters, destination, cover_path=None):
     return str(destination)
 
 
-class BrowserPage(QWebEnginePage):
-    """Open links in the same browser view instead of an unhandled popup."""
+NOVELHALL_AD_CLEANUP_SCRIPT = r"""
+(() => {
+    const selectors = [
+        '#ad-home-middle-box',
+        'iframe[src*="doubleclick.net"]',
+        'iframe[src*="googlesyndication.com"]',
+        'iframe[src*="googleadservices.com"]',
+        'ins.adsbygoogle',
+        '[data-ad-slot]',
+        '.adsbygoogle',
+        '.ad-container',
+        '.advertisement'
+    ];
+    const hideAds = () => document.querySelectorAll(selectors.join(',')).forEach(el => el.remove());
+    hideAds();
+    if (document.body) {
+        new MutationObserver(hideAds).observe(document.body, {childList: true, subtree: true});
+    }
+})();
+"""
+
+
+class NovelHallAdBlocker(QWebEngineUrlRequestInterceptor):
+    """Block known ad hosts for the NovelHall profile only."""
+    BLOCKED_HOSTS = (
+        "opalrove.com",  # Ad banner currently served in NovelHall's home-page ad slot.
+        "doubleclick.net",
+        "googlesyndication.com",
+        "googleadservices.com",
+        "adnxs.com",
+        "taboola.com",
+        "outbrain.com",
+        "popads.net",
+        "popcash.net",
+        "propellerads.com",
+    )
+
     def __init__(self, parent=None):
         super().__init__(parent)
+
+    @classmethod
+    def is_blocked_host(cls, host):
+        host = host.lower().rstrip(".")
+        return any(host == domain or host.endswith("." + domain) for domain in cls.BLOCKED_HOSTS)
+
+    def interceptRequest(self, info):
+        if self.is_blocked_host(info.requestUrl().host()):
+            info.block(True)
+
+
+class BrowserPage(QWebEnginePage):
+    """Open links in the same browser view instead of an unhandled popup."""
+    def __init__(self, profile=None, parent=None, ad_blocker=None):
+        if profile is None:
+            super().__init__(parent)
+        else:
+            super().__init__(profile, parent)
+        self.ad_blocker = ad_blocker
         self.newWindowRequested.connect(self._open_requested_url)
 
     @Slot(object)
     def _open_requested_url(self, request):
+        if self.ad_blocker and self.ad_blocker.is_blocked_host(request.requestedUrl().host()):
+            return
         request.openIn(self)
 
 
@@ -276,6 +332,8 @@ class DownloadWorker(QObject):
         self.source = source
         self.novel_url = novel_url
         self.novel_id = novel_url
+        url_path = urlparse(novel_url).path.strip("/")
+        self.work_id = re.sub(r"[^A-Za-z0-9._-]+", "_", url_path)[-48:].strip("._-") or "novel"
         self.chapter_limit = chapter_limit
         self.output_dir = Path(output_dir)
         self.formats = list(formats)
@@ -354,7 +412,7 @@ class DownloadWorker(QObject):
             work_parent.mkdir(parents=True, exist_ok=True)
             sys.stdout = quiet_writer
             sys.stderr = quiet_writer
-            work_dir = Path(tempfile.mkdtemp(prefix=f"novel-{self.novel_id}-", dir=work_parent))
+            work_dir = Path(tempfile.mkdtemp(prefix=f"novel-{self.work_id}-", dir=work_parent))
             os.environ["READNOVEL_OUTPUT_DIR"] = str(work_dir)
             os.environ["NOVELHALL_OUTPUT_DIR"] = str(work_dir)
             if self.source == "novelhall":
@@ -609,6 +667,7 @@ class MainWindow(QMainWindow):
 
         self.address = QLineEdit()
         self.address.setPlaceholderText("Enter a ReadNovelFull or NovelHall page address")
+        self.address.setClearButtonEnabled(True)
         self.address.returnPressed.connect(self.navigate)
         controls.addWidget(self.address, 1)
         self.go_button = self._button("Open", "QuietButton")
@@ -656,9 +715,15 @@ class MainWindow(QMainWindow):
         bar.addLayout(actions)
 
         self.browser = QWebEngineView()
-        self.browser.setPage(BrowserPage(self.browser))
+        self.browser.setPage(BrowserPage(parent=self.browser))
         self.novelhall_browser = QWebEngineView()
-        self.novelhall_browser.setPage(BrowserPage(self.novelhall_browser))
+        self.novelhall_profile = QWebEngineProfile(self.novelhall_browser)
+        self.novelhall_ad_blocker = NovelHallAdBlocker(self.novelhall_profile)
+        self.novelhall_profile.setUrlRequestInterceptor(self.novelhall_ad_blocker)
+        self.novelhall_browser.setPage(BrowserPage(self.novelhall_profile, self.novelhall_browser))
+        self.novelhall_browser.page().loadFinished.connect(
+            lambda _ok: self.novelhall_browser.page().runJavaScript(NOVELHALL_AD_CLEANUP_SCRIPT)
+        )
         self.browser_tabs.addTab(self.browser, "ReadNovelFull")
         self.browser_tabs.addTab(self.novelhall_browser, "NovelHall")
         self.browser_tabs.currentChanged.connect(self._source_tab_changed)
@@ -792,13 +857,11 @@ class MainWindow(QMainWindow):
         return self.novelhall_browser if self.browser_tabs.currentIndex() == 1 else self.browser
 
     def _source_tab_changed(self, index):
-        browser = self._active_browser()
-        self.address.setText(browser.url().toString())
+        self.address.clear()
         self.site_note.setText("NovelHall browser ready" if index == 1 else "Browser ready")
 
     def _url_changed(self, url, browser=None):
-        if browser is None or browser is self._active_browser():
-            self.address.setText(url.toString())
+        self.address.clear()
 
     def _load_finished(self, ok):
         self.site_note.setText("Page ready" if ok else "Page could not load")

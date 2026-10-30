@@ -15,6 +15,7 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 OutputDir=release
 OutputBaseFilename=ReadNovelFull-Setup-Windows-x64
+SetupIconFile=ReadNovelFull_Icon.ico
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
@@ -34,8 +35,8 @@ Source: "README_RELEASE.txt"; DestDir: "{app}"; DestName: "README.txt"; Flags: i
 Source: "THIRD_PARTY_NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\ReadNovelFull Library"; Filename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\ReadNovelFull Library"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\ReadNovelFull Library"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"
+Name: "{autodesktop}\ReadNovelFull Library"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch ReadNovelFull Library"; Flags: postinstall nowait skipifsilent

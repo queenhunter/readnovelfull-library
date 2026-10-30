@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#183b53"/>
+      <stop offset="1" stop-color="#102638"/>
+    </linearGradient>
+    <linearGradient id="pages" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf5"/>
+      <stop offset="1" stop-color="#e9dfca"/>
+    </linearGradient>
+  </defs>
+  <path d="M128 55C94 36 56 36 29 48v143c30-11 66-8 99 12 33-20 69-23 99-12V48c-27-12-65-12-99 7Z" fill="url(#cover)" stroke="#0b1d2a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M128 68c-30-17-62-17-87-7v111c27-8 57-4 87 13V68Z" fill="url(#pages)" stroke="#d7c8aa" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M128 68c30-17 62-17 87-7v111c-27-8-57-4-87 13V68Z" fill="url(#pages)" stroke="#d7c8aa" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M128 70v116" fill="none" stroke="#b8a98e" stroke-width="4"/>
+  <path d="M48 89c21-6 43-4 62 5M48 110c21-6 43-4 62 5M48 131c21-6 43-4 62 5M146 94c19-9 41-11 62-5M146 115c19-9 41-11 62-5M146 136c19-9 41-11 62-5" fill="none" stroke="#c5b89f" stroke-width="3" stroke-linecap="round" opacity=".85"/>
+  <path d="M174 52h19v44l-9.5-8-9.5 8Z" fill="#b68c45" stroke="#8f692c" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M29 48v143M227 48v143" fill="none" stroke="#d2a959" stroke-width="5" stroke-linecap="round"/>
+</svg>
