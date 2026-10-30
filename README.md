@@ -1,2 +1,2 @@
 # readnovelfull-library
-Read Novel Full novel download by one click,
+ReadNovelFull Library is a Windows app for browsing novels and saving them as clean TXT, EPUB, or PDF files.
