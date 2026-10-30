@@ -152,10 +152,10 @@ def select_novel_id():
             print("❌ Please enter a valid number.")
 
 # ====== STEP 0: Get novel title dynamically with fallback ======
-def get_novel_title(novel_id, chapter_list_url):
+def get_novel_title(novel_id, chapter_list_url, novel_page_url=None):
     print("📡 Fetching novel title...")
     global HEADERS
-    novel_url = f'{BASE_URL}/novel-{novel_id}.html'
+    novel_url = novel_page_url or f'{BASE_URL}/novel-{novel_id}.html'
     novel_title = f"Novel ID {novel_id}"
     
     r = None
@@ -212,13 +212,50 @@ def get_novel_title(novel_id, chapter_list_url):
     return novel_title
 
 # ====== STEP 1: Get chapter links ======
-def get_chapter_links(chapter_list_url):
+def get_chapter_links(chapter_list_url, novel_page_url=None):
+    """Fetch the full archive and fall back to chapter links embedded in the novel page."""
     print("📡 Fetching chapter list...")
-    r = requests.get(chapter_list_url, headers=HEADERS)
-    print(f"   Status: {r.status_code}")
-    soup = BeautifulSoup(r.text, "html.parser")
-    links = [BASE_URL + a["href"] for a in soup.select("ul.list-chapter li a")]
-    links = links[::-1]
+    urls = [chapter_list_url]
+    page_url = novel_page_url or HEADERS.get("Referer")
+    if page_url and page_url not in urls:
+        urls.append(page_url)
+
+    links = []
+    seen = set()
+    for url in urls:
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=20)
+            print(f"   Status: {r.status_code} ({url})")
+            r.raise_for_status()
+        except requests.RequestException as exc:
+            print(f"   Chapter source unavailable: {exc}")
+            continue
+
+        soup = BeautifulSoup(r.text, "html.parser")
+        chapter_anchors = soup.select(
+            "#chapter-archive ul.list-chapter li a[href], "
+            "#list-chapter ul.list-chapter li a[href], "
+            "ul.list-chapter li a[href]"
+        )
+        if not chapter_anchors:
+            # Keep compatibility with markup changes that preserve the chapter URL shape.
+            chapter_anchors = [
+                anchor for anchor in soup.select("a[href]")
+                if re.search(r"/chapter-[^/]+\.html(?:$|[?#])", anchor.get("href", ""), re.I)
+            ]
+
+        for anchor in chapter_anchors:
+            href = anchor.get("href", "").strip()
+            if not href:
+                continue
+            chapter_url = urljoin(BASE_URL, href)
+            if chapter_url not in seen:
+                seen.add(chapter_url)
+                links.append(chapter_url)
+        if links:
+            break
+
+    links.reverse()
     print(f"✅ Found {len(links)} chapters.")
     return links
 
@@ -705,9 +742,9 @@ def find_cover_urls(soup, page_url):
             urls.append(full)
     return urls
 
-def download_cover(novel_id, novel_title):
+def download_cover(novel_id, novel_title, novel_page_url=None):
     print("🖼️ Downloading novel cover...")
-    novel_url = f"{BASE_URL}/novel-{novel_id}.html"
+    novel_url = novel_page_url or f"{BASE_URL}/novel-{novel_id}.html"
     safe_title = "".join(c for c in novel_title if c not in r'\/:*?"<>|').strip() or f"novel_{novel_id}"
     img_headers = {
         'User-Agent': HEADERS['User-Agent'],

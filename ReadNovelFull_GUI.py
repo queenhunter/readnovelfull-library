@@ -327,11 +327,11 @@ class DownloadWorker(QObject):
     finished = Signal(str)
     failed = Signal(str)
 
-    def __init__(self, source, novel_url, chapter_limit, output_dir, formats, batch_size):
+    def __init__(self, source, novel_url, novel_id, chapter_limit, output_dir, formats, batch_size):
         super().__init__()
         self.source = source
         self.novel_url = novel_url
-        self.novel_id = novel_url
+        self.novel_id = novel_id
         url_path = urlparse(novel_url).path.strip("/")
         self.work_id = re.sub(r"[^A-Za-z0-9._-]+", "_", url_path)[-48:].strip("._-") or "novel"
         self.chapter_limit = chapter_limit
@@ -440,19 +440,20 @@ class DownloadWorker(QObject):
                 clean_dir = Path(module.CLEAN_DIR)
             else:
                 module = load_downloader()
-                match = re.search(r"/novel-(\d+)(?:\.html)?", self.novel_url, flags=re.I)
-                novel_id = int(match.group(1)) if match else self.novel_url
+                novel_page_url = self.novel_url.split("#", 1)[0].split("?", 1)[0]
+                novel_id = int(self.novel_id)
                 module.NOVEL_ID = novel_id
+                module.NOVEL_PAGE_URL = novel_page_url
                 module.CHAPTER_LIST_URL = f"{module.BASE_URL}/ajax/chapter-archive?novelId={novel_id}"
                 module.HEADERS = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
-                    "Referer": f"{module.BASE_URL}/novel-{novel_id}.html",
+                    "Referer": novel_page_url,
                     "X-Requested-With": "XMLHttpRequest",
                 }
                 self.status.emit("Finding chapters…")
-                novel_title = module.get_novel_title(novel_id, module.CHAPTER_LIST_URL)
-                links = module.get_chapter_links(module.CHAPTER_LIST_URL)
-                cover_path = module.download_cover(novel_id, novel_title)
+                novel_title = module.get_novel_title(novel_id, module.CHAPTER_LIST_URL, novel_page_url)
+                links = module.get_chapter_links(module.CHAPTER_LIST_URL, novel_page_url)
+                cover_path = module.download_cover(novel_id, novel_title, novel_page_url)
                 clean_dir = None
             if self.chapter_limit > 0:
                 links = links[:self.chapter_limit]
@@ -897,29 +898,34 @@ class MainWindow(QMainWindow):
         host = (urlparse(url).hostname or "").lower()
         if host != "readnovelfull.com" and not host.endswith(".readnovelfull.com"):
             raise ValueError("Open a novel page on readnovelfull.com before downloading.")
-        match = re.search(r"/novel-(\d+)(?:\.html)?", url, flags=re.I)
-        if match:
-            return int(match.group(1))
-        # Download pages sometimes use a title slug instead of the numerical novel ID.
+
+        # The site's source ID on the novel page is authoritative. Prefer it to
+        # IDs embedded in route formats, which can vary between site versions.
         import requests
         from bs4 import BeautifulSoup
-        response = requests.get(url.split("#", 1)[0], headers={
+        page_url = url.split("#", 1)[0].split("?", 1)[0]
+        response = requests.get(page_url, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36"
-        }, timeout=15)
+        }, timeout=20)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         id_tag = soup.find(attrs={"data-novel-id": True})
-        if id_tag and str(id_tag.get("data-novel-id", "")).isdigit():
-            return int(id_tag["data-novel-id"])
+        if id_tag and str(id_tag.get("data-novel-id", "")).strip().isdigit():
+            return int(str(id_tag["data-novel-id"]).strip())
         for script in soup.find_all("script"):
-            if script.string:
-                found = re.search(r"(?:novelId|novel_id)\s*[=:]\s*(\d+)", script.string)
-                if found:
-                    return int(found.group(1))
+            script_text = script.string or script.get_text()
+            found = re.search(r"(?:novelId|novel_id)\s*[=:]\s*[\"']?(\d+)", script_text)
+            if found:
+                return int(found.group(1))
         hidden = soup.find("input", {"name": re.compile(r"novel.?id", re.I)})
         if hidden and str(hidden.get("value", "")).isdigit():
             return int(hidden["value"])
-        raise ValueError("I couldn't identify the novel ID from this page. Open its main novel page and try again.")
+
+        # Keep support for older pages whose path is the only available ID.
+        match = re.search(r"/novel-(\d+)(?:\.html)?", page_url, flags=re.I)
+        if match:
+            return int(match.group(1))
+        raise ValueError("I couldn't identify the novel source ID on this page. Reload the novel page and try again.")
 
     def _download_mode_changed(self, index):
         self.chapter_limit.setEnabled(index == 2)
@@ -1023,7 +1029,7 @@ class MainWindow(QMainWindow):
         self.settings_button.setEnabled(False)
         self.site_note.setText("Preparing download…")
         self._download_thread = QThread(self)
-        self._worker = DownloadWorker(source, novel_url, chapter_limit, output_dir, formats, batch_size)
+        self._worker = DownloadWorker(source, novel_url, novel_id, chapter_limit, output_dir, formats, batch_size)
         self._worker.moveToThread(self._download_thread)
         self._download_thread.started.connect(self._worker.run)
         self._worker.progress.connect(self._update_progress)
