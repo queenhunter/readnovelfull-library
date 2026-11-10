@@ -259,12 +259,70 @@ def get_chapter_links(chapter_list_url, novel_page_url=None):
     print(f"✅ Found {len(links)} chapters.")
     return links
 
+
+def get_novelfull_novel_info(novel_page_url, headers, cancel_event=None, status_callback=None):
+    """Read Novelfull's paginated chapter lists and return title plus oldest-to-newest URLs."""
+    clean_url = novel_page_url.split("#", 1)[0].split("?", 1)[0]
+    page_path = urlparse(clean_url).path.rstrip("/")
+    novel_slug = os.path.basename(page_path).removesuffix(".html")
+    if not novel_slug:
+        raise ValueError("Open a novel page on novelfull.com before downloading.")
+
+    title = novel_slug.replace("-", " ").title()
+    chapter_links = []
+    seen = set()
+    page_number = 1
+    while page_number <= 1000:
+        if cancel_event and cancel_event.is_set():
+            break
+        page_url = clean_url if page_number == 1 else f"{clean_url}?page={page_number}"
+        if status_callback:
+            status_callback(f"Finding chapters · page {page_number}…")
+        response = requests.get(page_url, headers=headers, timeout=20)
+        if page_number == 1:
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            title_tag = soup.select_one("h1.novel-title, .novel-title h1, h1.title, h1")
+            if title_tag:
+                parsed_title = title_tag.get_text(" ", strip=True)
+                if parsed_title:
+                    title = parsed_title
+            current_soup = soup
+        else:
+            if response.status_code != 200:
+                break
+            current_soup = BeautifulSoup(response.text, "html.parser")
+
+        new_count = 0
+        for anchor in current_soup.select(".chapter-list a[href]"):
+            href = anchor.get("href", "").strip()
+            if not href:
+                continue
+            full_url = urljoin(clean_url, href).split("?", 1)[0].split("#", 1)[0]
+            parsed_path = urlparse(full_url).path
+            if not parsed_path.startswith(f"/{novel_slug}/chapter-"):
+                continue
+            if not re.search(r"/chapter-[^/]+\.html$", parsed_path, re.I):
+                continue
+            if full_url not in seen:
+                seen.add(full_url)
+                chapter_links.append(full_url)
+                new_count += 1
+        if not new_count:
+            break
+        page_number += 1
+
+    print(f"✅ Found {len(chapter_links)} Novelfull chapters.")
+    return title, chapter_links
+
 # ====== STEP 2: Download chapters ======
-def download_chapters(links, progress_callback=None):
-    """Download chapter pages, optionally reporting (current, total, event)."""
+def download_chapters(links, progress_callback=None, cancel_event=None):
+    """Download chapters, returning early when a caller signals cancellation."""
     print("⬇️ Downloading chapters...")
     total = len(links)
     for i, url in enumerate(links, start=1):
+        if cancel_event and cancel_event.is_set():
+            break
         filename = os.path.join(HTML_DIR, f"raw_{i:04d}.html")
         if progress_callback:
             progress_callback(i, total, "starting")
@@ -276,7 +334,10 @@ def download_chapters(links, progress_callback=None):
                 with open(filename, "w", encoding="utf-8") as f:
                     f.write(r.text)
                 print(f"✅ Saved: raw_{i:04d}.html")
-                time.sleep(2)
+                if cancel_event:
+                    cancel_event.wait(2)
+                else:
+                    time.sleep(2)
         except Exception as e:
             print(f"❌ Failed to download {url}: {e}")
             response = locals().get("r")
@@ -286,6 +347,8 @@ def download_chapters(links, progress_callback=None):
         finally:
             if progress_callback:
                 progress_callback(i, total, "finished")
+        if cancel_event and cancel_event.is_set():
+            break
 
 # ====== STEP 3: Rename from latest to earliest ======
 def rename_html_files():

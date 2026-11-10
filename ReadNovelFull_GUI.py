@@ -14,16 +14,16 @@ import time
 import urllib.request
 import webbrowser
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 from PySide6.QtCore import QObject, QThread, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
-    QPushButton, QSpinBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget,
+    QPushButton, QSpinBox, QStatusBar, QVBoxLayout, QWidget,
 )
-from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from PySide6.QtWebEngineCore import QWebEnginePage
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 if getattr(sys, "frozen", False):
@@ -34,10 +34,8 @@ else:
     APP_DIR = Path(__file__).resolve().parent
     RESOURCE_DIR = APP_DIR
 DOWNLOADER_FILE = RESOURCE_DIR / "Read_Novel_Full_V2_8.py"
-NOVELHALL_DOWNLOADER_FILE = RESOURCE_DIR / "Novel Hall V1.0.py"
 DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "ReadNovelFull"
 DEFAULT_SITE = "https://readnovelfull.com/"
-NOVELHALL_SITE = "https://www.novelhall.com/"
 APP_VERSION = "1.0.3"
 GITHUB_REPOSITORY = "queenhunter/readnovelfull-library"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest"
@@ -84,18 +82,6 @@ def load_downloader():
     if not DOWNLOADER_FILE.is_file():
         raise FileNotFoundError(f"Downloader script not found: {DOWNLOADER_FILE}")
     spec = importlib.util.spec_from_file_location("readnovelfull_downloader", DOWNLOADER_FILE)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def load_script(path, module_name):
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Couldn't load downloader script: {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -254,71 +240,19 @@ def make_pdf_from_chapters(novel_title, chapters, destination, cover_path=None):
     return str(destination)
 
 
-NOVELHALL_AD_CLEANUP_SCRIPT = r"""
-(() => {
-    const selectors = [
-        '#ad-home-middle-box',
-        'iframe[src*="doubleclick.net"]',
-        'iframe[src*="googlesyndication.com"]',
-        'iframe[src*="googleadservices.com"]',
-        'ins.adsbygoogle',
-        '[data-ad-slot]',
-        '.adsbygoogle',
-        '.ad-container',
-        '.advertisement'
-    ];
-    const hideAds = () => document.querySelectorAll(selectors.join(',')).forEach(el => el.remove());
-    hideAds();
-    if (document.body) {
-        new MutationObserver(hideAds).observe(document.body, {childList: true, subtree: true});
-    }
-})();
-"""
-
-
-class NovelHallAdBlocker(QWebEngineUrlRequestInterceptor):
-    """Block known ad hosts for the NovelHall profile only."""
-    BLOCKED_HOSTS = (
-        "opalrove.com",  # Ad banner currently served in NovelHall's home-page ad slot.
-        "doubleclick.net",
-        "googlesyndication.com",
-        "googleadservices.com",
-        "adnxs.com",
-        "taboola.com",
-        "outbrain.com",
-        "popads.net",
-        "popcash.net",
-        "propellerads.com",
-    )
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    @classmethod
-    def is_blocked_host(cls, host):
-        host = host.lower().rstrip(".")
-        return any(host == domain or host.endswith("." + domain) for domain in cls.BLOCKED_HOSTS)
-
-    def interceptRequest(self, info):
-        if self.is_blocked_host(info.requestUrl().host()):
-            info.block(True)
-
-
 class BrowserPage(QWebEnginePage):
     """Open links in the same browser view instead of an unhandled popup."""
-    def __init__(self, profile=None, parent=None, ad_blocker=None):
-        if profile is None:
-            super().__init__(parent)
-        else:
-            super().__init__(profile, parent)
-        self.ad_blocker = ad_blocker
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.newWindowRequested.connect(self._open_requested_url)
 
     @Slot(object)
     def _open_requested_url(self, request):
-        if self.ad_blocker and self.ad_blocker.is_blocked_host(request.requestedUrl().host()):
-            return
         request.openIn(self)
+
+
+class DownloadCancelled(Exception):
+    """Raised to stop a download between interruptible steps."""
 
 
 class DownloadWorker(QObject):
@@ -326,67 +260,35 @@ class DownloadWorker(QObject):
     status = Signal(str)
     finished = Signal(str)
     failed = Signal(str)
+    cancelled = Signal(str, str)
 
-    def __init__(self, source, novel_url, novel_id, chapter_start, chapter_end, output_dir, formats, batch_size):
+    def __init__(self, novel_url, chapter_start, chapter_end, output_dir, formats, batch_size):
         super().__init__()
-        self.source = source
         self.novel_url = novel_url
-        self.novel_id = novel_id
         url_path = urlparse(novel_url).path.strip("/")
         self.work_id = re.sub(r"[^A-Za-z0-9._-]+", "_", url_path)[-48:].strip("._-") or "novel"
         self.chapter_start = chapter_start
         self.chapter_end = chapter_end
+        self.cancel_event = threading.Event()
+        self.keep_partial = False
         self.output_dir = Path(output_dir)
         self.formats = list(formats)
         self.batch_size = batch_size
 
-    @staticmethod
-    def _download_novelhall_cover(novel_url, novel_title, headers, work_dir):
-        try:
-            import requests
-            from bs4 import BeautifulSoup
-        except ImportError:
-            return None
-        response = requests.get(novel_url, headers=headers, timeout=20)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        image_url = None
-        for selector in (
-            'meta[property="og:image"]',
-            'meta[name="og:image"]',
-            ".novel-cover img",
-            ".book-cover img",
-            "img.cover",
-            "img[src]",
-        ):
-            node = soup.select_one(selector)
-            if not node:
-                continue
-            candidate = node.get("content") or node.get("data-src") or node.get("src")
-            if candidate and not candidate.startswith("data:"):
-                image_url = urljoin(novel_url, candidate)
-                if selector != "img[src]":
-                    break
-                alt = (node.get("alt") or "").lower()
-                if any(word in alt for word in ("cover", "novel", "book")):
-                    break
-                image_url = None
-        if not image_url:
-            return None
-        image = requests.get(image_url, headers=headers, timeout=20)
-        image.raise_for_status()
-        destination = work_dir / "novel-cover"
-        destination.write_bytes(image.content)
-        return str(destination) if read_cover_image(destination) else None
+    def request_cancel(self, keep_partial):
+        self.keep_partial = keep_partial
+        self.cancel_event.set()
+
+    def _check_cancelled(self):
+        if self.cancel_event.is_set():
+            raise DownloadCancelled()
 
     @Slot()
     def run(self):
         old_stdout = sys.stdout
         old_stderr = sys.stderr
         old_output_dir = os.environ.get("READNOVEL_OUTPUT_DIR")
-        old_novelhall_dir = os.environ.get("NOVELHALL_OUTPUT_DIR")
         old_cwd = Path.cwd()
-        old_novelhall_base_dir = None
         work_dir = None
         work_parent = None
 
@@ -403,6 +305,7 @@ class DownloadWorker(QObject):
         quiet_writer = QuietWriter()
         result_path = None
         error_message = None
+        partial_format_label = ""
         try:
             # Keep all intermediate chapter and conversion files out of the visible folder.
             local_app_data = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
@@ -415,47 +318,35 @@ class DownloadWorker(QObject):
             sys.stderr = quiet_writer
             work_dir = Path(tempfile.mkdtemp(prefix=f"novel-{self.work_id}-", dir=work_parent))
             os.environ["READNOVEL_OUTPUT_DIR"] = str(work_dir)
-            os.environ["NOVELHALL_OUTPUT_DIR"] = str(work_dir)
-            if self.source == "novelhall":
-                module = load_script(NOVELHALL_DOWNLOADER_FILE, "novelhall_downloader")
-                old_novelhall_base_dir = module.BASE_DIR
-                module.BASE_DIR = str(work_dir)
-                module.HTML_DIR = str(work_dir / "html")
-                module.TXT_DIR = str(work_dir / "chapters")
-                module.MERGED_DIR = str(work_dir / "merged")
-                module.FAILED_DIR = str(work_dir / "failed")
-                module.CLEAN_DIR = str(work_dir / "clean_novel")
-                for folder in (module.HTML_DIR, module.TXT_DIR, module.MERGED_DIR, module.FAILED_DIR, module.CLEAN_DIR):
-                    Path(folder).mkdir(parents=True, exist_ok=True)
-                module.BASE_URL = "https://www.novelhall.com"
-                module.HEADERS = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36"
-                }
-                novel_id = self.novel_url.split("#", 1)[0].split("?", 1)[0]
-                if (urlparse(novel_id).hostname or "").lower() not in {"www.novelhall.com", "novelhall.com"}:
-                    raise ValueError("Open a novel page on novelhall.com before downloading.")
-                self.status.emit("Finding chapters…")
-                novel_title = module.get_novel_title(novel_id, module.HEADERS)
-                links = module.get_chapter_links(novel_id, module.HEADERS)
-                cover_path = self._download_novelhall_cover(novel_id, novel_title, module.HEADERS, work_dir)
-                clean_dir = Path(module.CLEAN_DIR)
+            module = load_downloader()
+            novel_page_url = self.novel_url.split("#", 1)[0].split("?", 1)[0]
+            module.NOVEL_PAGE_URL = novel_page_url
+            module.HEADERS = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+                "Referer": novel_page_url,
+                "X-Requested-With": "XMLHttpRequest",
+            }
+            host = (urlparse(novel_page_url).hostname or "").lower()
+            self.status.emit("Finding novel…")
+            if host == "novelfull.com" or host.endswith(".novelfull.com"):
+                novel_title, links = module.get_novelfull_novel_info(
+                    novel_page_url, module.HEADERS, self.cancel_event, self.status.emit
+                )
+                novel_id = Path(urlparse(novel_page_url).path).stem
             else:
-                module = load_downloader()
-                novel_page_url = self.novel_url.split("#", 1)[0].split("?", 1)[0]
-                novel_id = int(self.novel_id)
-                module.NOVEL_ID = novel_id
-                module.NOVEL_PAGE_URL = novel_page_url
+                novel_id = module.fetch_novel_id_from_url(novel_page_url, module.HEADERS)
+                if not novel_id:
+                    raise RuntimeError("Couldn't identify this novel. Open its main page and try again.")
+                self._check_cancelled()
+                module.NOVEL_ID = int(novel_id)
                 module.CHAPTER_LIST_URL = f"{module.BASE_URL}/ajax/chapter-archive?novelId={novel_id}"
-                module.HEADERS = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
-                    "Referer": novel_page_url,
-                    "X-Requested-With": "XMLHttpRequest",
-                }
                 self.status.emit("Finding chapters…")
                 novel_title = module.get_novel_title(novel_id, module.CHAPTER_LIST_URL, novel_page_url)
+                self._check_cancelled()
                 links = module.get_chapter_links(module.CHAPTER_LIST_URL, novel_page_url)
-                cover_path = module.download_cover(novel_id, novel_title, novel_page_url)
-                clean_dir = None
+            self._check_cancelled()
+            cover_path = module.download_cover(novel_id, novel_title, novel_page_url)
+            self._check_cancelled()
             if not links:
                 raise RuntimeError("No chapters were found for this novel. Check the page and try again.")
             if self.chapter_start < 1 or self.chapter_start > len(links):
@@ -482,26 +373,18 @@ class DownloadWorker(QObject):
                     last_completed, total, "" if eta is None else str(int(eta)), str(current)
                 )
 
-            if self.source == "novelhall":
-                module.download_chapters(links, chapter_limit=0, progress_callback=report_progress)
-                self.status.emit("Preparing text files…")
-                renamed = module.rename_html_files()
-                txts = module.convert_html_to_txt(renamed)
-                module.merge_txt_files(txts, novel_title)
-                module.cleanup_files()
-                module.clean_merged_files()
-                epub_path = None
-                clean_dir = Path(module.CLEAN_DIR)
-            else:
-                module.download_chapters(links, progress_callback=report_progress)
-                self.status.emit("Preparing text files…")
-                renamed = module.rename_html_files()
-                txts = module.convert_html_to_txt(renamed)
-                module.merge_txt_files(txts, novel_title)
-                module.cleanup_files()
-                module.clean_merged_files(novel_title)
-                epub_path = None
-                clean_dir = Path(module.novel_clean_dir(novel_title))
+            module.download_chapters(links, progress_callback=report_progress, cancel_event=self.cancel_event)
+            if self.cancel_event.is_set():
+                raw_chapters = list(Path(module.HTML_DIR).glob("raw_*.html"))
+                if not self.keep_partial or not raw_chapters:
+                    raise DownloadCancelled()
+            self.status.emit("Preparing text files…")
+            renamed = module.rename_html_files()
+            txts = module.convert_html_to_txt(renamed)
+            module.merge_txt_files(txts, novel_title)
+            module.cleanup_files()
+            module.clean_merged_files(novel_title)
+            clean_dir = Path(module.novel_clean_dir(novel_title))
 
             safe_title = "".join(c for c in novel_title if c not in r'\\/:*?"<>|').strip() or "novel"
             novel_output = self.output_dir / safe_title
@@ -509,18 +392,24 @@ class DownloadWorker(QObject):
             copied = []
             txt_paths = sorted(clean_dir.glob("*.txt"))
             chapters = read_clean_chapters(txt_paths)
+            is_partial_download = self.cancel_event.is_set()
+            export_formats = self.formats
+            if is_partial_download:
+                export_formats = [fmt for fmt in self.formats if fmt in {"TXT", "PDF"}] or ["TXT"]
+                partial_format_label = ", ".join(export_formats)
             batch_size = self.batch_size if self.batch_size > 0 else len(chapters)
             batches = [chapters[index:index + batch_size] for index in range(0, len(chapters), batch_size)]
             total_batches = len(batches)
 
-            # Remove stale exports from prior runs using the same output naming scheme.
-            for existing in novel_output.iterdir():
-                if not existing.is_file():
-                    continue
-                if existing.name.casefold() in {f"{safe_title}.txt".casefold(), f"{safe_title}.epub".casefold(), f"{safe_title}.pdf".casefold()}:
-                    existing.unlink()
-                elif re.fullmatch(rf"{re.escape(safe_title)} Chapters \d{{4}}-\d{{4}}\.(?:txt|epub|pdf)", existing.name, flags=re.I):
-                    existing.unlink()
+            # Preserve existing exports if the user chooses to keep a partial download.
+            if not is_partial_download:
+                for existing in novel_output.iterdir():
+                    if not existing.is_file():
+                        continue
+                    if existing.name.casefold() in {f"{safe_title}.txt".casefold(), f"{safe_title}.epub".casefold(), f"{safe_title}.pdf".casefold()}:
+                        existing.unlink()
+                    elif re.fullmatch(rf"{re.escape(safe_title)} Chapters \d{{4}}-\d{{4}}\.(?:txt|epub|pdf)", existing.name, flags=re.I):
+                        existing.unlink()
 
             for batch_index, batch in enumerate(batches, start=1):
                 start_chapter = range_start + (batch_index - 1) * batch_size
@@ -530,17 +419,19 @@ class DownloadWorker(QObject):
                     file_stem = safe_title
                 else:
                     file_stem = f"{safe_title} {range_label}"
+                if is_partial_download:
+                    file_stem = f"{file_stem} (partial)"
 
-                if "TXT" in self.formats:
+                if "TXT" in export_formats:
                     txt_output = novel_output / f"{file_stem}.txt"
                     txt_output.write_text(render_chapters(novel_title, batch), encoding="utf-8")
                     copied.append(txt_output)
-                if "EPUB" in self.formats:
+                if "EPUB" in export_formats:
                     self.status.emit(f"Creating EPUB {batch_index} of {total_batches}…")
                     epub_output = novel_output / f"{file_stem}.epub"
                     make_epub_from_chapters(novel_title, batch, epub_output, cover_path)
                     copied.append(epub_output)
-                if "PDF" in self.formats:
+                if "PDF" in export_formats:
                     self.status.emit(f"Creating PDF {batch_index} of {total_batches}…")
                     pdf_output = novel_output / f"{file_stem}.pdf"
                     make_pdf_from_chapters(novel_title, batch, pdf_output, cover_path)
@@ -549,8 +440,11 @@ class DownloadWorker(QObject):
             if not copied:
                 raise RuntimeError("No files were created. Select at least one supported format.")
             result_path = str(novel_output)
+        except DownloadCancelled:
+            pass
         except Exception as exc:
-            error_message = str(exc)
+            if not self.cancel_event.is_set():
+                error_message = str(exc)
         finally:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
@@ -562,20 +456,6 @@ class DownloadWorker(QObject):
                 os.environ.pop("READNOVEL_OUTPUT_DIR", None)
             else:
                 os.environ["READNOVEL_OUTPUT_DIR"] = old_output_dir
-            if old_novelhall_dir is None:
-                os.environ.pop("NOVELHALL_OUTPUT_DIR", None)
-            else:
-                os.environ["NOVELHALL_OUTPUT_DIR"] = old_novelhall_dir
-            if old_novelhall_base_dir is not None:
-                try:
-                    module.BASE_DIR = old_novelhall_base_dir
-                    module.HTML_DIR = os.path.join(old_novelhall_base_dir, "html")
-                    module.TXT_DIR = os.path.join(old_novelhall_base_dir, "chapters")
-                    module.MERGED_DIR = os.path.join(old_novelhall_base_dir, "merged")
-                    module.FAILED_DIR = os.path.join(old_novelhall_base_dir, "failed")
-                    module.CLEAN_DIR = os.path.join(old_novelhall_base_dir, "clean_novel")
-                except Exception:
-                    pass
             if work_dir and work_dir.exists():
                 try:
                     shutil.rmtree(work_dir)
@@ -587,7 +467,9 @@ class DownloadWorker(QObject):
                     work_parent.parent.rmdir()
                 except OSError:
                     pass
-        if error_message:
+        if self.cancel_event.is_set():
+            self.cancelled.emit(result_path if self.keep_partial and result_path else "", partial_format_label)
+        elif error_message:
             self.failed.emit(error_message)
         elif result_path:
             self.finished.emit(result_path)
@@ -629,7 +511,6 @@ class MainWindow(QMainWindow):
         self._build_ui()
         QApplication.styleHints().colorSchemeChanged.connect(self._apply_style)
         self.browser.setUrl(QUrl(DEFAULT_SITE))
-        self.novelhall_browser.setUrl(QUrl(NOVELHALL_SITE))
         if self.settings.get("check_updates", True):
             self._check_for_updates_async()
 
@@ -668,14 +549,12 @@ class MainWindow(QMainWindow):
         self.forward_button.clicked.connect(self.browser_forward)
         self.reload_button = self._button("Reload", "QuietButton")
         self.reload_button.clicked.connect(self.browser_reload)
-        self.browser_tabs = QTabWidget()
-        self.browser_tabs.setDocumentMode(True)
         controls.addWidget(self.back_button)
         controls.addWidget(self.forward_button)
         controls.addWidget(self.reload_button)
 
         self.address = QLineEdit()
-        self.address.setPlaceholderText("Enter a ReadNovelFull or NovelHall page address")
+        self.address.setPlaceholderText("Enter a ReadNovelFull or NovelFull page address")
         self.address.setClearButtonEnabled(True)
         self.address.returnPressed.connect(self.navigate)
         controls.addWidget(self.address, 1)
@@ -735,23 +614,9 @@ class MainWindow(QMainWindow):
 
         self.browser = QWebEngineView()
         self.browser.setPage(BrowserPage(parent=self.browser))
-        self.novelhall_browser = QWebEngineView()
-        self.novelhall_profile = QWebEngineProfile(self.novelhall_browser)
-        self.novelhall_ad_blocker = NovelHallAdBlocker(self.novelhall_profile)
-        self.novelhall_profile.setUrlRequestInterceptor(self.novelhall_ad_blocker)
-        self.novelhall_browser.setPage(BrowserPage(self.novelhall_profile, self.novelhall_browser))
-        self.novelhall_browser.page().loadFinished.connect(
-            lambda _ok: self.novelhall_browser.page().runJavaScript(NOVELHALL_AD_CLEANUP_SCRIPT)
-        )
-        self.browser_tabs.addTab(self.browser, "ReadNovelFull")
-        self.browser_tabs.addTab(self.novelhall_browser, "NovelHall")
-        self.browser_tabs.currentChanged.connect(self._source_tab_changed)
         self.browser.urlChanged.connect(lambda url: self._url_changed(url, self.browser))
-        self.novelhall_browser.urlChanged.connect(lambda url: self._url_changed(url, self.novelhall_browser))
         self.browser.loadStarted.connect(lambda: self.site_note.setText("Loading page…"))
-        self.novelhall_browser.loadStarted.connect(lambda: self.site_note.setText("Loading NovelHall…"))
         self.browser.loadFinished.connect(self._load_finished)
-        self.novelhall_browser.loadFinished.connect(self._load_finished)
 
         progress_panel = QWidget()
         progress_panel.setObjectName("progressPanel")
@@ -774,10 +639,17 @@ class MainWindow(QMainWindow):
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setFixedHeight(9)
         self.progress_bar.setInvertedAppearance(QApplication.layoutDirection() == Qt.LayoutDirection.RightToLeft)
-        progress_layout.addWidget(self.progress_bar)
+        progress_row = QHBoxLayout()
+        progress_row.addWidget(self.progress_bar, 1)
+        self.cancel_button = self._button("Cancel", "QuietButton", "Stop downloading and choose whether to keep completed chapters.")
+        self.cancel_button.clicked.connect(self.cancel_download)
+        self.cancel_button.setFixedWidth(92)
+        self.cancel_button.hide()
+        progress_row.addWidget(self.cancel_button)
+        progress_layout.addLayout(progress_row)
 
         page.addWidget(top)
-        page.addWidget(self.browser_tabs, 1)
+        page.addWidget(self.browser, 1)
         page.addWidget(progress_panel)
         self.setCentralWidget(root)
         status = QStatusBar()
@@ -849,9 +721,6 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(f"""
             QMainWindow {{ background: {colors['window']}; color: {colors['text']}; }}
             QWidget#topbar, QWidget#progressPanel {{ background: {colors['panel']}; }}
-            QTabWidget::pane {{ border: 0; }}
-            QTabBar::tab {{ color: {colors['muted']}; background: {colors['quiet']}; padding: 9px 16px; }}
-            QTabBar::tab:selected {{ color: {colors['text']}; background: {colors['panel']}; }}
             QLabel#title {{ color: {colors['text']}; font: 700 23px 'Segoe UI'; }}
             QLabel#subtitle, QLabel#siteNote, QLabel#etaLabel {{ color: {colors['muted']}; font: 13px 'Segoe UI'; }}
             QLabel#progressText {{ color: {colors['text']}; font: 600 13px 'Segoe UI'; }}
@@ -873,11 +742,7 @@ class MainWindow(QMainWindow):
         """)
 
     def _active_browser(self):
-        return self.novelhall_browser if self.browser_tabs.currentIndex() == 1 else self.browser
-
-    def _source_tab_changed(self, index):
-        self.address.clear()
-        self.site_note.setText("NovelHall browser ready" if index == 1 else "Browser ready")
+        return self.browser
 
     def _url_changed(self, url, browser=None):
         self.address.clear()
@@ -891,16 +756,7 @@ class MainWindow(QMainWindow):
             return
         if not re.match(r"^https?://", text, flags=re.I):
             text = "https://" + text
-        browser = self._active_browser()
-        parsed = urlparse(text)
-        host = (parsed.hostname or "").lower()
-        if self.browser_tabs.currentIndex() == 0 and host.endswith("novelhall.com"):
-            self.browser_tabs.setCurrentIndex(1)
-            browser = self.novelhall_browser
-        elif self.browser_tabs.currentIndex() == 1 and host.endswith("readnovelfull.com"):
-            self.browser_tabs.setCurrentIndex(0)
-            browser = self.browser
-        browser.setUrl(QUrl(text))
+        self.browser.setUrl(QUrl(text))
 
     def browser_back(self):
         self._active_browser().back()
@@ -910,40 +766,6 @@ class MainWindow(QMainWindow):
 
     def browser_reload(self):
         self._active_browser().reload()
-
-    def _novel_id_from_current_url(self):
-        url = self._active_browser().url().toString()
-        host = (urlparse(url).hostname or "").lower()
-        if host != "readnovelfull.com" and not host.endswith(".readnovelfull.com"):
-            raise ValueError("Open a novel page on readnovelfull.com before downloading.")
-
-        # The site's source ID on the novel page is authoritative. Prefer it to
-        # IDs embedded in route formats, which can vary between site versions.
-        import requests
-        from bs4 import BeautifulSoup
-        page_url = url.split("#", 1)[0].split("?", 1)[0]
-        response = requests.get(page_url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36"
-        }, timeout=20)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        id_tag = soup.find(attrs={"data-novel-id": True})
-        if id_tag and str(id_tag.get("data-novel-id", "")).strip().isdigit():
-            return int(str(id_tag["data-novel-id"]).strip())
-        for script in soup.find_all("script"):
-            script_text = script.string or script.get_text()
-            found = re.search(r"(?:novelId|novel_id)\s*[=:]\s*[\"']?(\d+)", script_text)
-            if found:
-                return int(found.group(1))
-        hidden = soup.find("input", {"name": re.compile(r"novel.?id", re.I)})
-        if hidden and str(hidden.get("value", "")).isdigit():
-            return int(hidden["value"])
-
-        # Keep support for older pages whose path is the only available ID.
-        match = re.search(r"/novel-(\d+)(?:\.html)?", page_url, flags=re.I)
-        if match:
-            return int(match.group(1))
-        raise ValueError("I couldn't identify the novel source ID on this page. Reload the novel page and try again.")
 
     def _download_mode_changed(self, index):
         self.chapter_start.setEnabled(index == 2)
@@ -1017,17 +839,11 @@ class MainWindow(QMainWindow):
     def begin_download(self):
         if self._download_thread and self._download_thread.isRunning():
             return
-        try:
-            novel_url = self._active_browser().url().toString()
-            source = "novelhall" if (urlparse(novel_url).hostname or "").lower().endswith("novelhall.com") else "readnovelfull"
-            if source == "novelhall":
-                if not re.search(r"/[^/]+-\d+/?$", urlparse(novel_url).path):
-                    raise ValueError("Open a NovelHall novel page before downloading.")
-                novel_id = novel_url
-            else:
-                novel_id = self._novel_id_from_current_url()
-        except Exception as exc:
-            QMessageBox.warning(self, "Can't start download", str(exc))
+        novel_url = self.browser.url().toString()
+        host = (urlparse(novel_url).hostname or "").lower()
+        supported_hosts = ("readnovelfull.com", "novelfull.com")
+        if not any(host == domain or host.endswith("." + domain) for domain in supported_hosts):
+            QMessageBox.warning(self, "Can't start download", "Open a novel page on readnovelfull.com or novelfull.com before downloading.")
             return
         output_dir = self.output_label.text().strip()
         mode = self.download_mode.currentIndex()
@@ -1040,8 +856,10 @@ class MainWindow(QMainWindow):
             return
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_text.setText("Finding chapters…")
+        self.progress_text.setText("Finding novel…")
         self.eta_label.clear()
+        self.cancel_button.setEnabled(True)
+        self.cancel_button.show()
         self.download_button.setEnabled(False)
         self.download_mode.setEnabled(False)
         self.chapter_start.setEnabled(False)
@@ -1050,21 +868,44 @@ class MainWindow(QMainWindow):
         self.settings_button.setEnabled(False)
         self.site_note.setText("Preparing download…")
         self._download_thread = QThread(self)
-        self._worker = DownloadWorker(source, novel_url, novel_id, chapter_start, chapter_end, output_dir, formats, batch_size)
+        self._worker = DownloadWorker(novel_url, chapter_start, chapter_end, output_dir, formats, batch_size)
         self._worker.moveToThread(self._download_thread)
         self._download_thread.started.connect(self._worker.run)
         self._worker.progress.connect(self._update_progress)
         self._worker.status.connect(self._update_status)
         self._worker.finished.connect(self._download_finished)
         self._worker.failed.connect(self._download_failed)
+        self._worker.cancelled.connect(self._download_cancelled)
         self._worker.finished.connect(self._download_thread.quit)
         self._worker.failed.connect(self._download_thread.quit)
+        self._worker.cancelled.connect(self._download_thread.quit)
         self._download_thread.finished.connect(self._worker.deleteLater)
         self._download_thread.finished.connect(self._thread_finished)
         self._download_thread.start()
 
+    def cancel_download(self):
+        if self._worker is None or self._worker.cancel_event.is_set():
+            return
+        answer = QMessageBox.question(
+            self,
+            "Cancel download",
+            "Keep the chapters that have already downloaded? They will be saved as TXT and/or PDF.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        keep_partial = answer == QMessageBox.StandardButton.Yes
+        self._worker.request_cancel(keep_partial)
+        self.cancel_button.setEnabled(False)
+        self.progress_text.setText(
+            "Stopping and saving downloaded chapters…" if keep_partial else "Stopping and discarding downloaded chapters…"
+        )
+        self.eta_label.clear()
+        self.site_note.setText("Canceling download…")
+
     @Slot(int, int, str, str)
     def _update_progress(self, completed, total, eta_seconds, active_chapter):
+        if self._worker is not None and self._worker.cancel_event.is_set():
+            return
         if total <= 0:
             self.progress_bar.setValue(0)
             return
@@ -1090,6 +931,24 @@ class MainWindow(QMainWindow):
         self.eta_label.clear()
         if message != "Finding chapters…":
             self.progress_bar.setRange(0, 0)
+        if message == "Preparing text files…":
+            self.cancel_button.setEnabled(False)
+
+    @Slot(str, str)
+    def _download_cancelled(self, path, formats):
+        self.progress_bar.setRange(0, 100)
+        self.eta_label.clear()
+        if path:
+            self.progress_text.setText("Download canceled · partial files saved")
+            self.eta_label.setText(f"Saved as {formats}")
+            self.site_note.setText("Partial download saved")
+            self.statusBar().showMessage(f"Partial chapters saved to {path}", 12000)
+        else:
+            if self._worker is not None and self._worker.keep_partial:
+                self.progress_text.setText("No partial files could be kept; temporary data removed")
+            else:
+                self.progress_text.setText("Download canceled; downloaded chapters discarded")
+            self.site_note.setText("Download canceled")
 
     @Slot(str)
     def _download_finished(self, path):
@@ -1112,6 +971,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _thread_finished(self):
+        self.cancel_button.hide()
+        self.cancel_button.setEnabled(True)
         self.download_button.setEnabled(True)
         self.download_mode.setEnabled(True)
         self.chapter_start.setEnabled(self.download_mode.currentIndex() == 2)
