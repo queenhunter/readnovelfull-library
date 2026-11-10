@@ -1,6 +1,6 @@
 #define AppName "ReadNovelFull Library"
-#ifndef AppVersion
-  #define AppVersion "1.0.0"
+#ifndef APP_VERSION
+  #define APP_VERSION "1.0.7"
 #endif
 #define AppPublisher "ReadNovelFull Library"
 #define AppExeName "ReadNovelFull.exe"
@@ -8,7 +8,7 @@
 [Setup]
 AppId={{763AE754-A6D5-4F70-AB30-7F56A5D92C0D}
 AppName={#AppName}
-AppVersion={#AppVersion}
+AppVersion={#APP_VERSION}
 AppPublisher={#AppPublisher}
 DefaultDirName={localappdata}\Programs\ReadNovelFull
 DefaultGroupName={#AppName}

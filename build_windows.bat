@@ -1,6 +1,9 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+set "APP_VERSION=%~1"
+if not defined APP_VERSION set "APP_VERSION=1.0.7"
+if /i "%APP_VERSION:~0,1%"=="v" set "APP_VERSION=%APP_VERSION:~1%"
 
 where py >nul 2>nul
 if errorlevel 1 (
@@ -33,8 +36,7 @@ if errorlevel 1 goto :failed
 if exist release rmdir /s /q release
 mkdir release
 if errorlevel 1 goto :failed
-set "APP_VERSION=1.0.0"
-"%ISCC%" installer.iss
+"%ISCC%" "/DAPP_VERSION=%APP_VERSION%" installer.iss
 if errorlevel 1 goto :failed
 
 echo.
