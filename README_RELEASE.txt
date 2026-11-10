@@ -4,7 +4,7 @@ Install
 1. Download ReadNovelFull-Setup-Windows-x64.exe from the GitHub Release.
 2. Double-click it. It installs under your Windows user profile and does not normally ask for administrator access.
 3. Start ReadNovelFull Library from the Start menu. A desktop shortcut is available as an installer option.
-4. Browse to a novel's main page on readnovelfull.com, choose All or Custom, then click Download this novel.
+4. Browse to a novel's main page on readnovelfull.com, choose a download mode, then click Download this novel. Custom lets you choose a starting chapter and an ending chapter; the ending defaults to the last chapter.
 
 The installer contains the app, Python runtime, Python packages, and Qt WebEngine browser runtime. You do not need to install Python or download dependencies when using the app. Internet access is needed to browse and retrieve pages.
 

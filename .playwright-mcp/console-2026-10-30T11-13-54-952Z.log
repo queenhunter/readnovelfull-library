@@ -1,0 +1,39 @@
+[     538ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://uds.uabcdashboard.workers.dev/favicon.ico:0
+[   35576ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   35733ms] TypeError: Cannot read properties of null (reading 'after')
+    at https://n-npw33txa2rd4kuccm3foppt7odiqn7b3anqzfry-0lu-script.googleusercontent.com/userCodeAppPanel:183:10
+    at https://n-npw33txa2rd4kuccm3foppt7odiqn7b3anqzfry-0lu-script.googleusercontent.com/userCodeAppPanel:203:3
+[   35759ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   36469ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   36649ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   36738ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   36748ms] TypeError: Cannot read properties of null (reading 'after')
+    at https://n-zp3ejrdyemkgynukgesw3pexi3iqn7b3anqzfry-0lu-script.googleusercontent.com/userCodeAppPanel:279:10
+    at https://n-zp3ejrdyemkgynukgesw3pexi3iqn7b3anqzfry-0lu-script.googleusercontent.com/userCodeAppPanel:299:3
+[   36762ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   37032ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   37340ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   37474ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   37721ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   37856ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   37927ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   39592ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   40675ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   41159ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   41169ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   43328ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   46564ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   46983ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   47621ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   47687ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   50343ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   59629ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   65738ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   66350ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   83053ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   95739ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  104460ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  125742ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  136824ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  155733ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  166753ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177

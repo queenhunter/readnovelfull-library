@@ -1,0 +1,44 @@
+[     403ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://uds.uabcdashboard.workers.dev/api/me:0
+[     514ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://uds.uabcdashboard.workers.dev/:0
+[   34412ms] TypeError: Cannot read properties of null (reading 'after')
+    at https://n-npw33txa2rd4kuccm3foppt7odiqn7b3anqzfry-0lu-script.googleusercontent.com/userCodeAppPanel:183:10
+    at https://n-npw33txa2rd4kuccm3foppt7odiqn7b3anqzfry-0lu-script.googleusercontent.com/userCodeAppPanel:203:3
+[   34456ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   34571ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   35444ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   35486ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   35570ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   35580ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   35859ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   36220ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   36253ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   36577ms] TypeError: Cannot read properties of null (reading 'after')
+    at https://n-zp3ejrdyemkgynukgesw3pexi3iqn7b3anqzfry-0lu-script.googleusercontent.com/userCodeAppPanel:279:10
+    at https://n-zp3ejrdyemkgynukgesw3pexi3iqn7b3anqzfry-0lu-script.googleusercontent.com/userCodeAppPanel:299:3
+[   36590ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   36747ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   37412ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   37958ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   39591ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   39947ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   41618ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   42829ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   46094ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   46281ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   46954ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   50696ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   50755ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   57945ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   59788ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   64414ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   74262ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[   94414ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  103430ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  124422ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  125995ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://uds.uabcdashboard.workers.dev/:0
+[  133876ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  154411ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  165251ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  184410ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  194462ms] [INFO] Net state changed from BUSY to IDLE @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177
+[  214411ms] [INFO] Net state changed from IDLE to BUSY @ https://script.google.com/static/macros/client/js/3549042494-warden_bin_i18n_warden__bn.js:177

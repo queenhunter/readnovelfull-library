@@ -1,0 +1,21 @@
+- generic [ref=e1]:
+  - heading "U UABC Dashboards" [level=1] [ref=e3]:
+    - generic [ref=e4]: U
+    - text: UABC Dashboards
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - img "United ABC International (BD) Limited" [ref=e9]
+      - img "Unity ABC Enterprise" [ref=e12]
+    - generic [ref=e13]:
+      - heading "U UABC Dashboards" [level=2] [ref=e14]:
+        - generic [ref=e15]: U
+        - text: UABC Dashboards
+      - paragraph [ref=e16]: Please sign in.
+      - textbox "Username" [active] [ref=e17]
+      - textbox "Password" [ref=e18]
+      - button "Sign in" [ref=e19] [cursor=pointer]
+      - link "📍 Staff check-in / check-out" [ref=e21] [cursor=pointer]:
+        - /url: /attendance
+  - generic [ref=e22]:
+    - generic [ref=e23]: United ABC International Limited
+    - generic [ref=e24]: Made by Md Boneyamin Saimon

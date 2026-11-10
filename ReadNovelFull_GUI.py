@@ -327,14 +327,15 @@ class DownloadWorker(QObject):
     finished = Signal(str)
     failed = Signal(str)
 
-    def __init__(self, source, novel_url, novel_id, chapter_limit, output_dir, formats, batch_size):
+    def __init__(self, source, novel_url, novel_id, chapter_start, chapter_end, output_dir, formats, batch_size):
         super().__init__()
         self.source = source
         self.novel_url = novel_url
         self.novel_id = novel_id
         url_path = urlparse(novel_url).path.strip("/")
         self.work_id = re.sub(r"[^A-Za-z0-9._-]+", "_", url_path)[-48:].strip("._-") or "novel"
-        self.chapter_limit = chapter_limit
+        self.chapter_start = chapter_start
+        self.chapter_end = chapter_end
         self.output_dir = Path(output_dir)
         self.formats = list(formats)
         self.batch_size = batch_size
@@ -455,10 +456,17 @@ class DownloadWorker(QObject):
                 links = module.get_chapter_links(module.CHAPTER_LIST_URL, novel_page_url)
                 cover_path = module.download_cover(novel_id, novel_title, novel_page_url)
                 clean_dir = None
-            if self.chapter_limit > 0:
-                links = links[:self.chapter_limit]
             if not links:
                 raise RuntimeError("No chapters were found for this novel. Check the page and try again.")
+            if self.chapter_start < 1 or self.chapter_start > len(links):
+                raise ValueError(f"Start chapter must be between 1 and {len(links)}.")
+            if self.chapter_end and self.chapter_end < self.chapter_start:
+                raise ValueError("Finish chapter must be the same as or later than the start chapter.")
+            if self.chapter_end > len(links):
+                raise ValueError(f"Finish chapter must be between {self.chapter_start} and {len(links)}.")
+            range_start = self.chapter_start
+            range_end = self.chapter_end or len(links)
+            links = links[range_start - 1:range_end]
 
             start_time = time.monotonic()
             last_completed = 0
@@ -515,10 +523,10 @@ class DownloadWorker(QObject):
                     existing.unlink()
 
             for batch_index, batch in enumerate(batches, start=1):
-                start_chapter = (batch_index - 1) * batch_size + 1
+                start_chapter = range_start + (batch_index - 1) * batch_size
                 end_chapter = start_chapter + len(batch) - 1
                 range_label = f"Chapters {start_chapter:04d}-{end_chapter:04d}"
-                if total_batches == 1 and self.batch_size == 0:
+                if total_batches == 1 and self.batch_size == 0 and self.chapter_start == 1 and self.chapter_end == 0:
                     file_stem = safe_title
                 else:
                     file_stem = f"{safe_title} {range_label}"
@@ -691,17 +699,27 @@ class MainWindow(QMainWindow):
         self.download_mode.setCurrentIndex(self.settings.get("download_mode", 0))
         self.download_mode.setFixedWidth(196)
         self.download_mode.currentIndexChanged.connect(self._download_mode_changed)
-        self.download_mode.setToolTip("Choose one complete file, batches of 100 chapters, or a custom chapter count.")
+        self.download_mode.setToolTip("Choose one complete file, batches of 100 chapters, or a custom chapter range.")
         actions.addWidget(self.download_mode)
-        self.chapter_limit = QSpinBox()
-        self.chapter_limit.setRange(1, 100000)
-        self.chapter_limit.setValue(20)
-        self.chapter_limit.setFixedWidth(100)
-        self.chapter_limit.setPrefix("First ")
-        self.chapter_limit.setSuffix(" ch.")
-        self.chapter_limit.setToolTip("Number of chapters to download when Custom is selected.")
-        self.chapter_limit.setEnabled(self.download_mode.currentIndex() == 2)
-        actions.addWidget(self.chapter_limit)
+        self.chapter_start = QSpinBox()
+        self.chapter_start.setRange(1, 100000)
+        self.chapter_start.setValue(1)
+        self.chapter_start.setFixedWidth(116)
+        self.chapter_start.setPrefix("From ")
+        self.chapter_start.setSuffix(" ch.")
+        self.chapter_start.setToolTip("First chapter to download when Custom is selected.")
+        self.chapter_start.setEnabled(self.download_mode.currentIndex() == 2)
+        actions.addWidget(self.chapter_start)
+        self.chapter_end = QSpinBox()
+        self.chapter_end.setRange(0, 100000)
+        self.chapter_end.setValue(0)
+        self.chapter_end.setSpecialValueText("To last")
+        self.chapter_end.setFixedWidth(104)
+        self.chapter_end.setPrefix("To ")
+        self.chapter_end.setSuffix(" ch.")
+        self.chapter_end.setToolTip("Last chapter to download. Leave as Last to download through the final chapter.")
+        self.chapter_end.setEnabled(self.download_mode.currentIndex() == 2)
+        actions.addWidget(self.chapter_end)
         self.open_folder_button = self._button("Output folder", "QuietButton")
         self.open_folder_button.clicked.connect(self.choose_output_dir)
         actions.addWidget(self.open_folder_button)
@@ -928,7 +946,8 @@ class MainWindow(QMainWindow):
         raise ValueError("I couldn't identify the novel source ID on this page. Reload the novel page and try again.")
 
     def _download_mode_changed(self, index):
-        self.chapter_limit.setEnabled(index == 2)
+        self.chapter_start.setEnabled(index == 2)
+        self.chapter_end.setEnabled(index == 2)
         if hasattr(self, "settings"):
             self.settings["download_mode"] = index
             save_settings(self.settings)
@@ -1012,7 +1031,8 @@ class MainWindow(QMainWindow):
             return
         output_dir = self.output_label.text().strip()
         mode = self.download_mode.currentIndex()
-        chapter_limit = self.chapter_limit.value() if mode == 2 else 0
+        chapter_start = self.chapter_start.value() if mode == 2 else 1
+        chapter_end = self.chapter_end.value() if mode == 2 else 0
         batch_size = 100 if mode == 1 else 0
         formats = list(self.settings.get("formats", ["EPUB", "TXT"]))
         if not formats:
@@ -1024,12 +1044,13 @@ class MainWindow(QMainWindow):
         self.eta_label.clear()
         self.download_button.setEnabled(False)
         self.download_mode.setEnabled(False)
-        self.chapter_limit.setEnabled(False)
+        self.chapter_start.setEnabled(False)
+        self.chapter_end.setEnabled(False)
         self.open_folder_button.setEnabled(False)
         self.settings_button.setEnabled(False)
         self.site_note.setText("Preparing download…")
         self._download_thread = QThread(self)
-        self._worker = DownloadWorker(source, novel_url, novel_id, chapter_limit, output_dir, formats, batch_size)
+        self._worker = DownloadWorker(source, novel_url, novel_id, chapter_start, chapter_end, output_dir, formats, batch_size)
         self._worker.moveToThread(self._download_thread)
         self._download_thread.started.connect(self._worker.run)
         self._worker.progress.connect(self._update_progress)
@@ -1093,7 +1114,8 @@ class MainWindow(QMainWindow):
     def _thread_finished(self):
         self.download_button.setEnabled(True)
         self.download_mode.setEnabled(True)
-        self.chapter_limit.setEnabled(self.download_mode.currentIndex() == 2)
+        self.chapter_start.setEnabled(self.download_mode.currentIndex() == 2)
+        self.chapter_end.setEnabled(self.download_mode.currentIndex() == 2)
         self.open_folder_button.setEnabled(True)
         self.settings_button.setEnabled(True)
         self._download_thread = None
