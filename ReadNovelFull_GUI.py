@@ -357,7 +357,10 @@ class DownloadWorker(QObject):
                 raise ValueError(f"Finish chapter must be between {self.chapter_start} and {len(links)}.")
             range_start = self.chapter_start
             range_end = self.chapter_end or len(links)
-            links = links[range_start - 1:range_end]
+            # Both supported sites list chapters newest-first. Convert the user's
+            # 1-based oldest-first range into the matching slice while preserving
+            # that order for download_chapters()/rename_html_files().
+            links = links[len(links) - range_end:len(links) - range_start + 1]
 
             start_time = time.monotonic()
             last_completed = 0
@@ -392,6 +395,12 @@ class DownloadWorker(QObject):
             copied = []
             txt_paths = sorted(clean_dir.glob("*.txt"))
             chapters = read_clean_chapters(txt_paths)
+            # The converter numbers a selected subset from 1; restore the
+            # original chapter numbers in the exported TXT, EPUB, and PDF.
+            chapters = [
+                (re.sub(r"^Chapter\s+\d+\b", f"Chapter {range_start + index}", title, flags=re.I), body)
+                for index, (title, body) in enumerate(chapters)
+            ]
             is_partial_download = self.cancel_event.is_set()
             export_formats = self.formats
             if is_partial_download:
